@@ -1,17 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
-using Sandbox.Game.GameSystems;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
-using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -29,9 +22,10 @@ namespace AtmosphericDamage
 		/////////////////////CHANGE THESE FOR EACH PLANET////////////////////////////
 
 		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
-		private const int UPDATE_RATE = 1000; //damage will apply every 200 frames
+		private const int UPDATE_RATE = 300; //damage will apply every 200 frames
 		private const float SMALL_SHIP_DAMAGE = 0.1f;
-		private const string DAMAGE_STRING = "Grind";
+		private const int AVOID_RUST_CHANCE = 10;
+		private const int AVOID_RUST_DOWN_CHANCE = 1;
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +33,8 @@ namespace AtmosphericDamage
 		private bool _init;
 		private HashSet<MyPlanet> _planets = new HashSet<MyPlanet>();
 		private int _updateCount = 0;
-		private MyStringHash _damageHash;
+		private MyStringHash _rustHash;
+		private MyStringHash _heavyRustHash;
 		private bool _processing;
 		private Queue<Action> _actionQueue = new Queue<Action>();
 		private int _actionsPerTick = 0;
@@ -58,7 +53,8 @@ namespace AtmosphericDamage
 				if (!_init)
 					Initialize();
 
-				ProcessQueue();
+				MyAPIGateway.Parallel.Start(ProcessQueue);
+				//ProcessQueue();
 
 				//update our list of planets every 10 seconds in case people paste new planets
 				if (++_updateCount % 600 == 0)
@@ -96,8 +92,6 @@ namespace AtmosphericDamage
 		{
 			try
 			{
-				var rustHash = MyStringHash.GetOrCompute("Rusty_Armor");
-				var heavyRustHash = MyStringHash.GetOrCompute("Heavy_Rust_Armor");
 				//MyVisualScriptLogicProvider.ShowNotification("Player position: " + MyVisualScriptLogicProvider.GetPlayersPosition(), 1000);
 				foreach (var planet in _planets)
 				{
@@ -111,6 +105,9 @@ namespace AtmosphericDamage
 						{
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
+							//TODO add check
+							//if (IsPositionInSafeZone(grid.WorldAABB.Center))
+							//	continue;
 							if (IsInsideAirtightGrid(grid))
 								continue;
 
@@ -118,54 +115,10 @@ namespace AtmosphericDamage
 							grid.GetBlocks(blocks);
 
 							MyCubeGrid gridInternal = (MyCubeGrid)grid;
-							const int AVOID_RUST_CHANCE = 10;
-							const int AVOID_RUST_DOWN_CHANCE = 1;
 
 							foreach (var block in blocks)
 							{
-								var openFaces = GetOpenFacesCount(block, grid);
-
-								if (openFaces > 0)
-								{
-									var integrityMultiplier = 1;
-									var avoidRustChance = AVOID_RUST_CHANCE * integrityMultiplier;
-									var avoidRustDownChance = AVOID_RUST_DOWN_CHANCE * integrityMultiplier;
-									if (block.SkinSubtypeId == heavyRustHash)
-									{
-										if (block.IsFullyDismounted)
-										{
-											if (_random.Next(AVOID_RUST_CHANCE) == 0)
-											{
-												//TODO: check if updating physics can be dopne ouside the loop for optimization
-												QueueInvoke(() => grid.RemoveBlock(block, true));
-											}
-										}
-										else
-										{
-											if (_random.Next(AVOID_RUST_DOWN_CHANCE) == 0)
-											{
-												QueueInvoke(() => block?.DecreaseMountLevel(SMALL_SHIP_DAMAGE, null));
-											}
-										}
-									}
-									else
-									{
-										if (block.SkinSubtypeId == rustHash)
-										{
-											if (_random.Next(AVOID_RUST_CHANCE) == 0)
-											{
-												QueueInvoke(() => gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: heavyRustHash));
-											}
-										}
-										else
-										{
-											if (_random.Next(AVOID_RUST_CHANCE) == 0)
-											{
-												QueueInvoke(() => gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: rustHash));
-											}
-										}
-									}
-								}
+								QueueInvoke(() => RustBlock(block, grid, gridInternal));
 							}
 						}
 					}
@@ -186,7 +139,8 @@ namespace AtmosphericDamage
 		{
 			_init = true;
 
-			_damageHash = MyStringHash.GetOrCompute(DAMAGE_STRING);
+			_rustHash = MyStringHash.GetOrCompute("Rusty_Armor");
+			_heavyRustHash = MyStringHash.GetOrCompute("Heavy_Rust_Armor");
 
 			//initialize our planet list
 			var entities = new HashSet<IMyEntity>();
@@ -263,11 +217,64 @@ namespace AtmosphericDamage
 			return false;
 		}
 
+		/*private static bool IsPositionInSafeZone(Vector3D coords)
+		{
+			return !MySessionComponentSafeZones.IsActionAllowed(coords, MySafeZoneAction.Shooting);
+		}*/
+
+		private void RustBlock(IMySlimBlock block, IMyCubeGrid grid, MyCubeGrid gridInternal)
+		{
+			var openFaces = GetOpenFacesCount(block, grid);
+
+			if (openFaces > 0)
+			{
+				var integrityMultiplier = 1;
+				var avoidRustChance = AVOID_RUST_CHANCE * integrityMultiplier;
+				var avoidRustDownChance = AVOID_RUST_DOWN_CHANCE * integrityMultiplier;
+				if (block.SkinSubtypeId == _heavyRustHash)
+				{
+					if (block.IsFullyDismounted)
+					{
+						if (_random.Next(AVOID_RUST_CHANCE) == 0)
+						{
+							//TODO: check if updating physics can be dopne ouside the loop for optimization
+							grid.RemoveBlock(block, true);
+						}
+					}
+					else
+					{
+						if (_random.Next(AVOID_RUST_DOWN_CHANCE) == 0)
+						{
+							block?.DecreaseMountLevel(SMALL_SHIP_DAMAGE, null);
+						}
+					}
+				}
+				else
+				{
+					if (block.SkinSubtypeId == _rustHash)
+					{
+						if (_random.Next(AVOID_RUST_CHANCE) == 0)
+						{
+							gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _heavyRustHash);
+						}
+					}
+					else
+					{
+						if (_random.Next(AVOID_RUST_CHANCE) == 0)
+						{
+							gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _rustHash);
+						}
+					}
+				}
+			}
+		}
+
 		//spread our invoke queue over many updates to avoid lag spikes
 		private void ProcessQueue()
 		{
 			if (_actionQueue.Count == 0)
 				return;
+			//MyVisualScriptLogicProvider.ShowNotification("Queue size: " + _actionQueue.Count, 1000);
 
 			for (int i = 0; i < _actionsPerTick; i++)
 			{
