@@ -14,7 +14,7 @@ using VRageMath;
  *  Based on script by Rexxar.
  */
 
-namespace AtmosphericDamage
+namespace RustMechanics
 {
 	[MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
 	public class DamageCore : MySessionComponentBase
@@ -22,10 +22,9 @@ namespace AtmosphericDamage
 		/////////////////////CHANGE THESE FOR EACH PLANET////////////////////////////
 
 		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
-		private const int UPDATE_RATE = 300; //damage will apply every 200 frames
-		private const float SMALL_SHIP_DAMAGE = 0.1f;
-		private const int AVOID_RUST_CHANCE = 10;
-		private const int AVOID_RUST_DOWN_CHANCE = 1;
+		private const int UPDATE_RATE = 300; //damage will apply every 5 seconds
+		private const float RUST_DAMAGE = 10f;
+		private const int RUST_PERCENTAGE = 10;
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -53,8 +52,8 @@ namespace AtmosphericDamage
 				if (!_init)
 					Initialize();
 
-				MyAPIGateway.Parallel.Start(ProcessQueue);
-				//ProcessQueue();
+				//MyAPIGateway.Parallel.Start(ProcessQueue);
+				ProcessQueue();
 
 				//update our list of planets every 10 seconds in case people paste new planets
 				if (++_updateCount % 600 == 0)
@@ -105,20 +104,22 @@ namespace AtmosphericDamage
 						{
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
-							//TODO add check
-							//if (IsPositionInSafeZone(grid.WorldAABB.Center))
-							//	continue;
+							//TODO add safezone check
+
 							if (IsInsideAirtightGrid(grid))
 								continue;
 
 							var blocks = new List<IMySlimBlock>();
 							grid.GetBlocks(blocks);
 
+							List<IMySlimBlock> randomBlocks = SelectRandomElements(blocks, blocks.Count * RUST_PERCENTAGE / 100 + 1);
+
 							MyCubeGrid gridInternal = (MyCubeGrid)grid;
 
-							foreach (var block in blocks)
+							foreach (var block in randomBlocks)
 							{
-								QueueInvoke(() => RustBlock(block, grid, gridInternal));
+								QueueInvoke(() => RustBlock(block, grid, gridInternal, blocks.Count));
+								//RustBlock(block, grid, gridInternal, blocks.Count);
 							}
 						}
 					}
@@ -133,6 +134,23 @@ namespace AtmosphericDamage
 				_actionsPerTick = _actionQueue.Count / UPDATE_RATE + 1;
 				_processing = false;
 			}
+		}
+
+		private List<IMySlimBlock> SelectRandomElements(List<IMySlimBlock> items, int k)
+		{
+			var selected = new List<IMySlimBlock>();
+			double needed = k;
+			double available = items.Count;
+			while (selected.Count < k)
+			{
+				if (_random.NextDouble() < needed / available)
+				{
+					selected.Add(items[(int)available - 1]);
+					needed--;
+				}
+				available--;
+			}
+			return selected;
 		}
 
 		private void Initialize()
@@ -155,7 +173,7 @@ namespace AtmosphericDamage
 			}
 		}
 
-		private bool IsExternal(IMySlimBlock block, IMyCubeGrid grid)
+		/*private bool IsExternal(IMySlimBlock block, IMyCubeGrid grid)
 		{
 			Vector3D posBlock = grid.GridIntegerToWorld(block.Position);
 			Vector3D posCenter = grid.WorldAABB.Center;
@@ -165,9 +183,9 @@ namespace AtmosphericDamage
 			Vector3I? blockPos = grid.RayCastBlocks(posBlock + direction * 50, posBlock);
 
 			return grid.GetCubeBlock(blockPos.Value) == block;
-		}
+		}*/
 
-		private int GetOpenFacesCount(IMySlimBlock block, IMyCubeGrid grid)
+		/*private int GetOpenFacesCount(IMySlimBlock block, IMyCubeGrid grid)
 		{
 			List<Vector3I> neighbourPositions = new List<Vector3I>
 			{
@@ -182,14 +200,59 @@ namespace AtmosphericDamage
 			foreach (Vector3I position in neighbourPositions)
 			{
 				if (grid.GetCubeBlock(position) != null)
+				{
+					//MyVisualScriptLogicProvider.ShowNotification("Found neibor block", 1000);
 					continue;
+				}
 				if (grid.IsRoomAtPositionAirtight(position))
+				{
+					//MyVisualScriptLogicProvider.ShowNotification("Found neibor airtigh", 1000);
 					continue;
+				}
 				openFacesCount++;
 			}
-			return openFacesCount;
-		}
+			//MyVisualScriptLogicProvider.ShowNotification("Found open faces: " + openFacesCount, 1000);
 
+			return openFacesCount;
+		}*/
+
+		private bool HasOpenFaces(IMySlimBlock block, IMyCubeGrid grid, int blocksInGrid)
+		{
+			// Not possible to cover all sides without at least 6 blocks
+			if (blocksInGrid <= 6)
+				return true;
+
+			List<Vector3I> neighbourPositions = new List<Vector3I>
+			{
+				block.Max + new Vector3I(1,0,0),
+				block.Max + new Vector3I(0,1,0),
+				block.Max + new Vector3I(0,0,1),
+				block.Min - new Vector3I(1,0,0),
+				block.Min - new Vector3I(0,1,0),
+				block.Min - new Vector3I(0,0,1)
+			};
+
+			foreach (Vector3I position in neighbourPositions)
+			{
+				//MyVisualScriptLogicProvider.ShowNotification("Position: " + position, 3000);
+				if (grid.GetCubeBlock(position) != null)
+				{
+					//if(grid.GetCubeBlock(position).FatBlock != null && grid.GetCubeBlock(position).FatBlock?.EntityId == block.FatBlock?.EntityId)
+					//	MyVisualScriptLogicProvider.ShowNotification("Block colission found", 3000);
+					//MyVisualScriptLogicProvider.ShowNotification("Found neibor block", 1000);
+					continue;
+				}
+				//TODO fix bug big grid stops disassemling after a while on science ship
+				if (grid.IsRoomAtPositionAirtight(position))
+				{
+					//MyVisualScriptLogicProvider.ShowNotification("Found neibor airtigh", 1000);
+					continue;
+				}
+				return true;
+			}
+
+			return false;
+		}
 
 		private static bool IsInsideAirtightGrid(IMyEntity grid)
 		{
@@ -211,7 +274,10 @@ namespace AtmosphericDamage
 				if (parentGrid == null)
 					continue;
 				if (parentGrid.IsRoomAtPositionAirtight(parentGrid.WorldToGridInteger(sphere.Center)))
+				{
+					//MyVisualScriptLogicProvider.ShowNotification(grid + "is inside airtight grid" , 1000);
 					return true;
+				}
 			}
 
 			return false;
@@ -222,48 +288,52 @@ namespace AtmosphericDamage
 			return !MySessionComponentSafeZones.IsActionAllowed(coords, MySafeZoneAction.Shooting);
 		}*/
 
-		private void RustBlock(IMySlimBlock block, IMyCubeGrid grid, MyCubeGrid gridInternal)
+		/*public static bool CheckSafezoneAction(IMyEntity ent, object actionId, long sourceEntityId = 0)
 		{
-			var openFaces = GetOpenFacesCount(block, grid);
+			ulong steamId = MyAPIGateway.Session?.Player?.SteamUserId ?? 0;
+			return MySessionComponentSafeZones.IsActionAllowed((MyEntity)ent, CastHax(MySessionComponentSafeZones.AllowedActions, actionId), sourceEntityId, steamId);
+		}*/
 
-			if (openFaces > 0)
+		private void RustBlock(IMySlimBlock block, IMyCubeGrid grid, MyCubeGrid gridInternal, int blocksInGrid)
+		{
+			//TODO does this fix nullk point exceptions?
+			//if (block == null)
+			//	return;
+			//var openFaces = blocksInGrid < 7 ? 7 - blocksInGrid : GetOpenFacesCount(block, grid);
+
+			//if (openFaces > 0)
+			if (HasOpenFaces(block, grid, blocksInGrid))
 			{
-				var integrityMultiplier = 1;
-				var avoidRustChance = AVOID_RUST_CHANCE * integrityMultiplier;
-				var avoidRustDownChance = AVOID_RUST_DOWN_CHANCE * integrityMultiplier;
 				if (block.SkinSubtypeId == _heavyRustHash)
 				{
 					if (block.IsFullyDismounted)
 					{
-						if (_random.Next(AVOID_RUST_CHANCE) == 0)
-						{
-							//TODO: check if updating physics can be dopne ouside the loop for optimization
-							grid.RemoveBlock(block, true);
-						}
+						//TODO: check if updating physics can be dopne ouside the loop for optimization
+						//MyVisualScriptLogicProvider.ShowNotification("Removing block id: " + block.FatBlock.EntityId, 1000);
+						grid.RemoveBlock(block, true);
+						//grid.RemoveBlock(block);
 					}
 					else
 					{
-						if (_random.Next(AVOID_RUST_DOWN_CHANCE) == 0)
-						{
-							block?.DecreaseMountLevel(SMALL_SHIP_DAMAGE, null);
-						}
+						block?.DecreaseMountLevel(RUST_DAMAGE, null);
+						//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
 					}
 				}
 				else
 				{
+					MyCube myCube;
+					gridInternal.TryGetCube(block.Position, out myCube);
+					if (myCube == null)
+						return;
+
 					if (block.SkinSubtypeId == _rustHash)
 					{
-						if (_random.Next(AVOID_RUST_CHANCE) == 0)
-						{
-							gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _heavyRustHash);
-						}
+						gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _heavyRustHash);
 					}
 					else
 					{
-						if (_random.Next(AVOID_RUST_CHANCE) == 0)
-						{
-							gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _rustHash);
-						}
+						gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _rustHash);
+						//gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _rustHash);
 					}
 				}
 			}
@@ -272,10 +342,9 @@ namespace AtmosphericDamage
 		//spread our invoke queue over many updates to avoid lag spikes
 		private void ProcessQueue()
 		{
+			//MyVisualScriptLogicProvider.ShowNotification("Queue size: " + _actionQueue.Count, 1000);
 			if (_actionQueue.Count == 0)
 				return;
-			//MyVisualScriptLogicProvider.ShowNotification("Queue size: " + _actionQueue.Count, 1000);
-
 			for (int i = 0; i < _actionsPerTick; i++)
 			{
 				Action action;
@@ -297,6 +366,7 @@ namespace AtmosphericDamage
 		{
 			try
 			{
+				//action();
 				MyAPIGateway.Utilities.InvokeOnGameThread(() =>
 				{
 					try
@@ -305,13 +375,13 @@ namespace AtmosphericDamage
 					}
 					catch (Exception e)
 					{
-						MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+						MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
 					}
 				});
 			}
 			catch (Exception e)
 			{
-				MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+				MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
 			}
 		}
 	}
