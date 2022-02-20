@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -24,7 +25,7 @@ namespace RustMechanics
 		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
 		private const int UPDATE_RATE = 300; //damage will apply every 5 seconds
 		private const float RUST_DAMAGE = 10f;
-		private const int RUST_PERCENTAGE = 10;
+		private const int RUST_PERCENTAGE_DOUBLE = 1;
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +38,7 @@ namespace RustMechanics
 		private bool _processing;
 		private Queue<Action> _actionQueue = new Queue<Action>();
 		private int _actionsPerTick = 0;
+		private int _skipTicks = 0;
 
 		public override void UpdateBeforeSimulation()
 		{
@@ -55,8 +57,8 @@ namespace RustMechanics
 				//MyAPIGateway.Parallel.Start(ProcessQueue);
 				ProcessQueue();
 
-				//update our list of planets every 10 seconds in case people paste new planets
-				if (++_updateCount % 600 == 0)
+				//update our list of planets every 19 seconds in case people paste new planets
+				if (++_updateCount % 1170 == 0)
 				{
 					_planets.Clear();
 					var entities = new HashSet<IMyEntity>();
@@ -79,7 +81,6 @@ namespace RustMechanics
 
 				_processing = true;
 				MyAPIGateway.Parallel.Start(ProcessDamage);
-				//ProcessDamage();
 			}
 			catch (Exception e)
 			{
@@ -91,6 +92,7 @@ namespace RustMechanics
 		{
 			try
 			{
+				_actionQueue.Clear();
 				//MyVisualScriptLogicProvider.ShowNotification("Player position: " + MyVisualScriptLogicProvider.GetPlayersPosition(), 1000);
 				foreach (var planet in _planets)
 				{
@@ -112,14 +114,26 @@ namespace RustMechanics
 							var blocks = new List<IMySlimBlock>();
 							grid.GetBlocks(blocks);
 
-							List<IMySlimBlock> randomBlocks = SelectRandomElements(blocks, blocks.Count * RUST_PERCENTAGE / 100 + 1);
-
 							MyCubeGrid gridInternal = (MyCubeGrid)grid;
 
-							foreach (var block in randomBlocks)
+							/*int a = 0;
+							Stopwatch stopWatch = new Stopwatch();
+							stopWatch.Start();
+							foreach (var block in blocks)
 							{
-								QueueInvoke(() => RustBlock(block, grid, gridInternal, blocks.Count));
-								//RustBlock(block, grid, gridInternal, blocks.Count);
+								if (_random.NextDouble() < RUST_PERCENTAGE_DOUBLE)
+									a++;
+							}
+							stopWatch.Stop();
+							// Get the elapsed time as a TimeSpan value.
+							TimeSpan ts = stopWatch.Elapsed;
+							MyVisualScriptLogicProvider.ShowNotification("Time to randomize: " + ts + " blocks: " + blocks.Count, 5000);*/
+
+							foreach (var block in blocks)
+							{
+								if (_random.NextDouble() < RUST_PERCENTAGE_DOUBLE)
+									QueueInvoke(() => RustBlock(block, grid, gridInternal, blocks.Count));
+									//RustBlock(block, grid, gridInternal, blocks.Count);
 							}
 						}
 					}
@@ -134,23 +148,6 @@ namespace RustMechanics
 				_actionsPerTick = _actionQueue.Count / UPDATE_RATE + 1;
 				_processing = false;
 			}
-		}
-
-		private List<IMySlimBlock> SelectRandomElements(List<IMySlimBlock> items, int k)
-		{
-			var selected = new List<IMySlimBlock>();
-			double needed = k;
-			double available = items.Count;
-			while (selected.Count < k)
-			{
-				if (_random.NextDouble() < needed / available)
-				{
-					selected.Add(items[(int)available - 1]);
-					needed--;
-				}
-				available--;
-			}
-			return selected;
 		}
 
 		private void Initialize()
@@ -242,7 +239,6 @@ namespace RustMechanics
 					//MyVisualScriptLogicProvider.ShowNotification("Found neibor block", 1000);
 					continue;
 				}
-				//TODO fix bug big grid stops disassemling after a while on science ship
 				if (grid.IsRoomAtPositionAirtight(position))
 				{
 					//MyVisualScriptLogicProvider.ShowNotification("Found neibor airtigh", 1000);
@@ -306,16 +302,20 @@ namespace RustMechanics
 			{
 				if (block.SkinSubtypeId == _heavyRustHash)
 				{
+					//Fix for hanging when lots of blocks are dismantling at same time. Making sure SE have time to deal with these heavy operations.
+					_skipTicks += 1;
 					if (block.IsFullyDismounted)
 					{
-						//TODO: check if updating physics can be dopne ouside the loop for optimization
 						//MyVisualScriptLogicProvider.ShowNotification("Removing block id: " + block.FatBlock.EntityId, 1000);
-						grid.RemoveBlock(block, true);
-						//grid.RemoveBlock(block);
+						//TODO which faster? any difference?
+						//grid.RemoveBlock(block, true);
+						gridInternal.RazeBlock(block.Position);
+						//_heavyActionsThisTick++;
 					}
 					else
 					{
-						block?.DecreaseMountLevel(RUST_DAMAGE, null);
+						block?.DecreaseMountLevel(RUST_DAMAGE, null, true);
+						//_heavyActionsThisTick++;
 						//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
 					}
 				}
@@ -333,7 +333,6 @@ namespace RustMechanics
 					else
 					{
 						gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _rustHash);
-						//gridInternal.ChangeColorAndSkin(gridInternal.GetCubeBlock(block.Position), skinSubtypeId: _rustHash);
 					}
 				}
 			}
@@ -347,6 +346,11 @@ namespace RustMechanics
 				return;
 			for (int i = 0; i < _actionsPerTick; i++)
 			{
+				if (_skipTicks > 0)
+				{
+					_skipTicks--;
+					return;
+				}
 				Action action;
 				if (!_actionQueue.TryDequeue(out action))
 					return;
