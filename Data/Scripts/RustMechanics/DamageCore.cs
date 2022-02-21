@@ -6,6 +6,7 @@ using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -24,7 +25,7 @@ namespace RustMechanics
 
 		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
 		private const int UPDATE_RATE = 300; //damage will apply every 5 seconds
-		private const float RUST_DAMAGE = 20f;
+		private const float RUST_DAMAGE = 1f;
 		private const double RUST_PERCENTAGE_DOUBLE = 1;
 
 		/////////////////////////////////////////////////////////////////////////////
@@ -94,7 +95,6 @@ namespace RustMechanics
 		{
 			try
 			{
-				_actionQueue.Clear();
 				//MyVisualScriptLogicProvider.ShowNotification("Player position: " + MyVisualScriptLogicProvider.GetPlayersPosition(), 1000);
 				foreach (var planet in _planets)
 				{
@@ -108,7 +108,9 @@ namespace RustMechanics
 						{
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
-							//TODO add safezone check
+
+							if (InSafezone(grid))
+								continue;
 
 							if (IsInsideAirtightGrid(grid))
 								continue;
@@ -293,16 +295,12 @@ namespace RustMechanics
 			return false;
 		}
 
-		/*private static bool IsPositionInSafeZone(Vector3D coords)
+		public static bool InSafezone(IMyEntity ent)
 		{
-			return !MySessionComponentSafeZones.IsActionAllowed(coords, MySafeZoneAction.Shooting);
-		}*/
+			return !MySessionComponentSafeZones.IsActionAllowed((MyEntity)ent, CastHax(MySessionComponentSafeZones.AllowedActions, 0x1));
+		}
 
-		/*public static bool CheckSafezoneAction(IMyEntity ent, object actionId, long sourceEntityId = 0)
-		{
-			ulong steamId = MyAPIGateway.Session?.Player?.SteamUserId ?? 0;
-			return MySessionComponentSafeZones.IsActionAllowed((MyEntity)ent, CastHax(MySessionComponentSafeZones.AllowedActions, actionId), sourceEntityId, steamId);
-		}*/
+		public static T CastHax<T>(T typeRef, object castObj) => (T)castObj;
 
 		private void RustBlockPaint(IMySlimBlock block, MyCubeGrid gridInternal)
 		{
