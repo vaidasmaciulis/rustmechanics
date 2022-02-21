@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -28,18 +27,11 @@ namespace RustMechanics
 	[MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
 	public class RustMechanics : MySessionComponentBase
 	{
-		/////////////////////CHANGE THESE FOR EACH PLANET////////////////////////////
-
-		//private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
-		private const int UPDATE_RATE = 600; //damage will apply every 10 seconds
+		private const int UPDATE_RATE = 600; //rust will apply every 10 seconds
 		private const float RUST_DAMAGE = 1f;
-		//private const double RUST_PERCENTAGE_DOUBLE = 1;
-
-		/////////////////////////////////////////////////////////////////////////////
 
 		private readonly Random _random = new Random();
 		private bool _init;
-		//private HashSet<MyPlanet> _planets = new HashSet<MyPlanet>();
 		private HashSet<RustyPlanet> _planets = new HashSet<RustyPlanet>();
 		private int _updateCount = 0;
 		private MyStringHash _rustHash;
@@ -48,7 +40,6 @@ namespace RustMechanics
 		private Queue<Action> _actionQueue = new Queue<Action>();
 		private Queue<Action> _slowQueue = new Queue<Action>();
 		private int _actionsPerTick = 0;
-		private int _skipTicks = 0;
 
 		public override void UpdateBeforeSimulation()
 		{
@@ -64,7 +55,6 @@ namespace RustMechanics
 				if (!_init)
 					Initialize();
 
-				//MyAPIGateway.Parallel.Start(ProcessQueue);
 				ProcessQueue();
 				ProcessSlowQueue();
 
@@ -107,7 +97,7 @@ namespace RustMechanics
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
 
-							if (InSafezone(grid))
+							if (InSafeZone(grid))
 								continue;
 
 							if (IsInsideAirtightGrid(grid))
@@ -118,19 +108,6 @@ namespace RustMechanics
 
 							MyCubeGrid gridInternal = (MyCubeGrid)grid;
 
-							/*int a = 0;
-							Stopwatch stopWatch = new Stopwatch();
-							stopWatch.Start();
-							foreach (var block in blocks)
-							{
-								if (_random.NextDouble() < RUST_PERCENTAGE_DOUBLE)
-									a++;
-							}
-							stopWatch.Stop();
-							// Get the elapsed time as a TimeSpan value.
-							TimeSpan ts = stopWatch.Elapsed;
-							MyVisualScriptLogicProvider.ShowNotification("Time to randomize: " + ts + " blocks: " + blocks.Count, 5000);*/
-
 							foreach (var block in blocks)
 							{
 								if (_random.NextDouble() < planet.RustProbability)
@@ -140,11 +117,11 @@ namespace RustMechanics
 										if (block.SkinSubtypeId == _heavyRustHash)
 										{
 											if (_slowQueue.Count < UPDATE_RATE)
-												_slowQueue.Enqueue(() => DamageBlock(block, gridInternal)); ;
+												_slowQueue.Enqueue(() => DamageBlock(block, gridInternal));
 										}
 										else
 										{
-											QueueInvoke(() => RustBlockPaint(block, gridInternal));
+											_actionQueue.Enqueue(() => RustBlockPaint(block, gridInternal));
 										}
 									}
 								}
@@ -155,7 +132,7 @@ namespace RustMechanics
 			}
 			catch (Exception e)
 			{
-				MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
 			}
 			finally
 			{
@@ -197,49 +174,6 @@ namespace RustMechanics
 			}
 		}
 
-		/*private bool IsExternal(IMySlimBlock block, IMyCubeGrid grid)
-		{
-			Vector3D posBlock = grid.GridIntegerToWorld(block.Position);
-			Vector3D posCenter = grid.WorldAABB.Center;
-			Vector3D direction = posBlock - posCenter;
-			direction.Normalize();
-
-			Vector3I? blockPos = grid.RayCastBlocks(posBlock + direction * 50, posBlock);
-
-			return grid.GetCubeBlock(blockPos.Value) == block;
-		}*/
-
-		/*private int GetOpenFacesCount(IMySlimBlock block, IMyCubeGrid grid)
-		{
-			List<Vector3I> neighbourPositions = new List<Vector3I>
-			{
-				block.Max + (Vector3I)Base6Directions.Directions[(int)block.Orientation.Up],
-				block.Max + (Vector3I)Base6Directions.Directions[(int)block.Orientation.Forward],
-				block.Max + (Vector3I)Base6Directions.Directions[(int)block.Orientation.Left],
-				block.Min - (Vector3I)Base6Directions.Directions[(int)block.Orientation.Up],
-				block.Min - (Vector3I)Base6Directions.Directions[(int)block.Orientation.Forward],
-				block.Min - (Vector3I)Base6Directions.Directions[(int)block.Orientation.Left]
-			};
-			int openFacesCount = 0;
-			foreach (Vector3I position in neighbourPositions)
-			{
-				if (grid.GetCubeBlock(position) != null)
-				{
-					//MyVisualScriptLogicProvider.ShowNotification("Found neibor block", 1000);
-					continue;
-				}
-				if (grid.IsRoomAtPositionAirtight(position))
-				{
-					//MyVisualScriptLogicProvider.ShowNotification("Found neibor airtigh", 1000);
-					continue;
-				}
-				openFacesCount++;
-			}
-			//MyVisualScriptLogicProvider.ShowNotification("Found open faces: " + openFacesCount, 1000);
-
-			return openFacesCount;
-		}*/
-
 		private bool HasOpenFaces(IMySlimBlock block, IMyCubeGrid grid, int blocksInGrid)
 		{
 			// Not possible to cover all sides without at least 6 blocks
@@ -261,8 +195,6 @@ namespace RustMechanics
 				//MyVisualScriptLogicProvider.ShowNotification("Position: " + position, 3000);
 				if (grid.GetCubeBlock(position) != null)
 				{
-					//if(grid.GetCubeBlock(position).FatBlock != null && grid.GetCubeBlock(position).FatBlock?.EntityId == block.FatBlock?.EntityId)
-					//	MyVisualScriptLogicProvider.ShowNotification("Block colission found", 3000);
 					//MyVisualScriptLogicProvider.ShowNotification("Found neibor block", 1000);
 					continue;
 				}
@@ -273,7 +205,6 @@ namespace RustMechanics
 				}
 				return true;
 			}
-
 			return false;
 		}
 
@@ -302,11 +233,10 @@ namespace RustMechanics
 					return true;
 				}
 			}
-
 			return false;
 		}
 
-		public static bool InSafezone(IMyEntity ent)
+		public static bool InSafeZone(IMyEntity ent)
 		{
 			return !MySessionComponentSafeZones.IsActionAllowed((MyEntity)ent, CastHax(MySessionComponentSafeZones.AllowedActions, 0x1));
 		}
@@ -338,12 +268,10 @@ namespace RustMechanics
 				//TODO which faster? any difference?
 				//grid.RemoveBlock(block, true);
 				gridInternal.RazeBlock(block.Position);
-				//_heavyActionsThisTick++;
 			}
 			else
 			{
 				block?.DecreaseMountLevel(RUST_DAMAGE, null, true);
-				//_heavyActionsThisTick++;
 				//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
 			}
 		}
@@ -356,11 +284,6 @@ namespace RustMechanics
 				return;
 			for (int i = 0; i < _actionsPerTick; i++)
 			{
-				if (_skipTicks > 0)
-				{
-					_skipTicks--;
-					return;
-				}
 				Action action;
 				if (!_actionQueue.TryDequeue(out action))
 					return;
@@ -371,7 +294,7 @@ namespace RustMechanics
 
 		private void ProcessSlowQueue()
 		{
-			//MyVisualScriptLogicProvider.ShowNotification("Sklow Queue size: " + _slowQueue.Count, 1000);
+			//MyVisualScriptLogicProvider.ShowNotification("Slow Queue size: " + _slowQueue.Count, 1000);
 			if (_slowQueue.Count == 0)
 				return;
 
@@ -402,13 +325,13 @@ namespace RustMechanics
 					}
 					catch (Exception e)
 					{
-						MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
+						//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
 					}
 				});
 			}
 			catch (Exception e)
 			{
-				MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
+				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
 			}
 		}
 	}
