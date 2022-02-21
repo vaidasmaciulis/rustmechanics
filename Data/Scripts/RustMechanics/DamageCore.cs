@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -18,21 +19,28 @@ using VRageMath;
 
 namespace RustMechanics
 {
+	public struct RustyPlanet
+	{
+		public MyPlanet MyPlanet;
+		public double RustProbability;
+	}
+
 	[MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
 	public class DamageCore : MySessionComponentBase
 	{
 		/////////////////////CHANGE THESE FOR EACH PLANET////////////////////////////
 
-		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
-		private const int UPDATE_RATE = 300; //damage will apply every 5 seconds
+		//private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
+		private const int UPDATE_RATE = 600; //damage will apply every 10 seconds
 		private const float RUST_DAMAGE = 1f;
-		private const double RUST_PERCENTAGE_DOUBLE = 1;
+		//private const double RUST_PERCENTAGE_DOUBLE = 1;
 
 		/////////////////////////////////////////////////////////////////////////////
 
 		private readonly Random _random = new Random();
 		private bool _init;
-		private HashSet<MyPlanet> _planets = new HashSet<MyPlanet>();
+		//private HashSet<MyPlanet> _planets = new HashSet<MyPlanet>();
+		private HashSet<RustyPlanet> _planets = new HashSet<RustyPlanet>();
 		private int _updateCount = 0;
 		private MyStringHash _rustHash;
 		private MyStringHash _heavyRustHash;
@@ -63,17 +71,7 @@ namespace RustMechanics
 				//update our list of planets every 19 seconds in case people paste new planets
 				if (++_updateCount % 1170 == 0)
 				{
-					_planets.Clear();
-					var entities = new HashSet<IMyEntity>();
-					MyAPIGateway.Entities.GetEntities(entities);
-					foreach (var entity in entities)
-					{
-						var planet = entity as MyPlanet;
-						if (planet == null)
-							continue;
-						if (planet.StorageName.StartsWith(PLANET_NAME))
-							_planets.Add(planet);
-					}
+					UpdatePlanetsList();
 				}
 
 				if (_updateCount % UPDATE_RATE != 0)
@@ -98,7 +96,7 @@ namespace RustMechanics
 				//MyVisualScriptLogicProvider.ShowNotification("Player position: " + MyVisualScriptLogicProvider.GetPlayersPosition(), 1000);
 				foreach (var planet in _planets)
 				{
-					var sphere = new BoundingSphereD(planet.PositionComp.GetPosition(), planet.AverageRadius + planet.AtmosphereAltitude);
+					var sphere = new BoundingSphereD(planet.MyPlanet.PositionComp.GetPosition(), planet.MyPlanet.AverageRadius + planet.MyPlanet.AtmosphereAltitude);
 
 					var topEntities = MyAPIGateway.Entities.GetTopMostEntitiesInSphere(ref sphere);
 					foreach (var entity in topEntities)
@@ -135,7 +133,7 @@ namespace RustMechanics
 
 							foreach (var block in blocks)
 							{
-								if (_random.NextDouble() < RUST_PERCENTAGE_DOUBLE)
+								if (_random.NextDouble() < planet.RustProbability)
 								{
 									if (HasOpenFaces(block, grid, blocks.Count))
 									{
@@ -173,16 +171,29 @@ namespace RustMechanics
 			_rustHash = MyStringHash.GetOrCompute("Rusty_Armor");
 			_heavyRustHash = MyStringHash.GetOrCompute("Heavy_Rust_Armor");
 
-			//initialize our planet list
+			UpdatePlanetsList();
+		}
+
+		private void UpdatePlanetsList()
+		{
+			_planets.Clear();
 			var entities = new HashSet<IMyEntity>();
-			MyAPIGateway.Entities.GetEntities(entities);
-			foreach (var entity in entities)
+			MyAPIGateway.Entities.GetEntities(entities, x => x is MyPlanet);
+			foreach (var entitiy in entities)
 			{
-				var planet = entity as MyPlanet;
-				if (planet == null)
-					continue;
-				if (planet.StorageName.StartsWith(PLANET_NAME))
-					_planets.Add(planet);
+				MyPlanet myPlanet = (MyPlanet)entitiy;
+				foreach (var planetConfig in Config.planetsConfig.planets)
+				{
+					if (myPlanet.StorageName.Contains(planetConfig.PlanetNameContains))
+					{
+						_planets.Add(new RustyPlanet()
+						{
+							MyPlanet = myPlanet,
+							//3600 - game ticks per minute
+							RustProbability = UPDATE_RATE / (3600 * planetConfig.AverageMinutesToStartRusting)
+						});
+					}
+				}
 			}
 		}
 
