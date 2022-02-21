@@ -24,8 +24,8 @@ namespace RustMechanics
 
 		private const string PLANET_NAME = "EarthLike"; //this mod targets planet EarthLike
 		private const int UPDATE_RATE = 300; //damage will apply every 5 seconds
-		private const float RUST_DAMAGE = 10f;
-		private const int RUST_PERCENTAGE_DOUBLE = 1;
+		private const float RUST_DAMAGE = 20f;
+		private const double RUST_PERCENTAGE_DOUBLE = 1;
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +37,7 @@ namespace RustMechanics
 		private MyStringHash _heavyRustHash;
 		private bool _processing;
 		private Queue<Action> _actionQueue = new Queue<Action>();
+		private Queue<Action> _slowQueue = new Queue<Action>();
 		private int _actionsPerTick = 0;
 		private int _skipTicks = 0;
 
@@ -56,6 +57,7 @@ namespace RustMechanics
 
 				//MyAPIGateway.Parallel.Start(ProcessQueue);
 				ProcessQueue();
+				ProcessSlowQueue();
 
 				//update our list of planets every 19 seconds in case people paste new planets
 				if (++_updateCount % 1170 == 0)
@@ -132,8 +134,20 @@ namespace RustMechanics
 							foreach (var block in blocks)
 							{
 								if (_random.NextDouble() < RUST_PERCENTAGE_DOUBLE)
-									QueueInvoke(() => RustBlock(block, grid, gridInternal, blocks.Count));
-									//RustBlock(block, grid, gridInternal, blocks.Count);
+								{
+									if (HasOpenFaces(block, grid, blocks.Count))
+									{
+										if (block.SkinSubtypeId == _heavyRustHash)
+										{
+											if (_slowQueue.Count < UPDATE_RATE)
+												_slowQueue.Enqueue(() => DamageBlock(block, gridInternal)); ;
+										}
+										else
+										{
+											QueueInvoke(() => RustBlockPaint(block, gridInternal));
+										}
+									}
+								}
 							}
 						}
 					}
@@ -290,51 +304,38 @@ namespace RustMechanics
 			return MySessionComponentSafeZones.IsActionAllowed((MyEntity)ent, CastHax(MySessionComponentSafeZones.AllowedActions, actionId), sourceEntityId, steamId);
 		}*/
 
-		private void RustBlock(IMySlimBlock block, IMyCubeGrid grid, MyCubeGrid gridInternal, int blocksInGrid)
+		private void RustBlockPaint(IMySlimBlock block, MyCubeGrid gridInternal)
 		{
-			//TODO does this fix nullk point exceptions?
-			//if (block == null)
-			//	return;
-			//var openFaces = blocksInGrid < 7 ? 7 - blocksInGrid : GetOpenFacesCount(block, grid);
+			MyCube myCube;
+			gridInternal.TryGetCube(block.Position, out myCube);
+			if (myCube == null)
+				return;
 
-			//if (openFaces > 0)
-			if (HasOpenFaces(block, grid, blocksInGrid))
+			if (block.SkinSubtypeId == _rustHash)
 			{
-				if (block.SkinSubtypeId == _heavyRustHash)
-				{
-					//Fix for hanging when lots of blocks are dismantling at same time. Making sure SE have time to deal with these heavy operations.
-					_skipTicks += 1;
-					if (block.IsFullyDismounted)
-					{
-						//MyVisualScriptLogicProvider.ShowNotification("Removing block id: " + block.FatBlock.EntityId, 1000);
-						//TODO which faster? any difference?
-						//grid.RemoveBlock(block, true);
-						gridInternal.RazeBlock(block.Position);
-						//_heavyActionsThisTick++;
-					}
-					else
-					{
-						block?.DecreaseMountLevel(RUST_DAMAGE, null, true);
-						//_heavyActionsThisTick++;
-						//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
-					}
-				}
-				else
-				{
-					MyCube myCube;
-					gridInternal.TryGetCube(block.Position, out myCube);
-					if (myCube == null)
-						return;
+				gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _heavyRustHash);
+			}
+			else
+			{
+				gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _rustHash);
+			}
+		}
 
-					if (block.SkinSubtypeId == _rustHash)
-					{
-						gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _heavyRustHash);
-					}
-					else
-					{
-						gridInternal.ChangeColorAndSkin(myCube.CubeBlock, skinSubtypeId: _rustHash);
-					}
-				}
+		private void DamageBlock(IMySlimBlock block, MyCubeGrid gridInternal)
+		{
+			if (block.IsFullyDismounted)
+			{
+				//MyVisualScriptLogicProvider.ShowNotification("Removing block id: " + block.FatBlock.EntityId, 1000);
+				//TODO which faster? any difference?
+				//grid.RemoveBlock(block, true);
+				gridInternal.RazeBlock(block.Position);
+				//_heavyActionsThisTick++;
+			}
+			else
+			{
+				block?.DecreaseMountLevel(RUST_DAMAGE, null, true);
+				//_heavyActionsThisTick++;
+				//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
 			}
 		}
 
@@ -357,6 +358,19 @@ namespace RustMechanics
 
 				SafeInvoke(action);
 			}
+		}
+
+		private void ProcessSlowQueue()
+		{
+			//MyVisualScriptLogicProvider.ShowNotification("Sklow Queue size: " + _slowQueue.Count, 1000);
+			if (_slowQueue.Count == 0)
+				return;
+
+			Action action;
+			if (!_slowQueue.TryDequeue(out action))
+				return;
+
+			SafeInvoke(action);
 		}
 
 		private void QueueInvoke(Action action)
