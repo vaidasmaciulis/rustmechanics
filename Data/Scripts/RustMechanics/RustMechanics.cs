@@ -26,7 +26,7 @@ namespace RustMechanics
 	}
 
 	[MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
-	public class DamageCore : MySessionComponentBase
+	public class RustMechanics : MySessionComponentBase
 	{
 		/////////////////////CHANGE THESE FOR EACH PLANET////////////////////////////
 
