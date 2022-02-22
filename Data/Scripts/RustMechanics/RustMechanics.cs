@@ -28,7 +28,7 @@ namespace RustMechanics
 	public class RustMechanics : MySessionComponentBase
 	{
 		private const int UPDATE_RATE = 600; //rust will apply every 10 seconds
-		private const float RUST_DAMAGE = 1f;
+		private const float RUST_DAMAGE = 0.5f;
 
 		private readonly Random _random = new Random();
 		private bool _init;
@@ -75,7 +75,7 @@ namespace RustMechanics
 			}
 			catch (Exception e)
 			{
-				MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
 			}
 		}
 
@@ -303,11 +303,6 @@ namespace RustMechanics
 				return;
 
 			SafeInvoke(action);
-		}
-
-		private void QueueInvoke(Action action)
-		{
-			_actionQueue.Enqueue(action);
 		}
 
 		//wrap invoke in try/catch so we don't crash on unexpected error
