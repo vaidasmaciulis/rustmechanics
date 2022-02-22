@@ -8,6 +8,8 @@ Grids inside SafeZone that has damage disabled will not rust.
 
 Server side only scripts! (Should work on Xbox dedicated servers, but not tested)
 
+!!WARNING!! This mod is still somewhat experimental. Bugs are expected, please report if encountered. Also careful adding this to your already build world without backup saves.
+
 
 [h1]Configuration[/h1]
 
