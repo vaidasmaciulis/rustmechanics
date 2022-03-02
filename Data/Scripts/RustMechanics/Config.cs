@@ -15,6 +15,7 @@ namespace RustMechanics
 
 	public struct PlanetsConfig
 	{
+		public bool OnlyRustUnpoweredGrids;
 		public List<Planet> planets;
 	}
 
@@ -23,6 +24,7 @@ namespace RustMechanics
 	{
 		public static PlanetsConfig planetsConfig = new PlanetsConfig()
 		{
+			OnlyRustUnpoweredGrids = false,
 			planets = new List<Planet>()
 			{
 				new Planet { PlanetNameContains = "Earth", AverageMinutesToStartRusting = 300},
@@ -36,7 +38,7 @@ namespace RustMechanics
 		{
 			try
 			{
-				string configFileName = "config.xml";
+				string configFileName = "config1.1.xml";
 				if (MyAPIGateway.Utilities.FileExistsInWorldStorage(configFileName, typeof(PlanetsConfig)))
 				{
 					var textReader = MyAPIGateway.Utilities.ReadFileInWorldStorage(configFileName, typeof(PlanetsConfig));
@@ -54,8 +56,7 @@ namespace RustMechanics
 			}
 			catch (Exception e)
 			{
-				MyAPIGateway.Utilities.ShowMessage("RustMechanics", "Exception: " + e);
-				MyVisualScriptLogicProvider.ShowNotification(e.Message, 5000);
+				//MyAPIGateway.Utilities.ShowMessage("RustMechanics", "Exception: " + e);
 			}
 		}
 	}

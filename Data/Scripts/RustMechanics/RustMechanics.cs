@@ -97,6 +97,9 @@ namespace RustMechanics
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
 
+							if (Config.planetsConfig.OnlyRustUnpoweredGrids && MyVisualScriptLogicProvider.HasPower(grid.Name))
+								continue;
+
 							if (InSafeZone(grid))
 								continue;
 
