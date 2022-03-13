@@ -13,24 +13,30 @@ namespace RustMechanics
 		public double AverageMinutesToStartRusting;
 	}
 
-	public struct PlanetsConfig
+	public struct RustConfig
 	{
 		public bool OnlyRustUnpoweredGrids;
-		public List<Planet> planets;
+		public List<Planet> Planets;
+		public List<string> BlockSubtypeContainsBlackList;
 	}
 
 	[MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
 	public class Config : MySessionComponentBase
 	{
-		public static PlanetsConfig planetsConfig = new PlanetsConfig()
+		public static RustConfig rustConfig = new RustConfig()
 		{
 			OnlyRustUnpoweredGrids = false,
-			planets = new List<Planet>()
+			Planets = new List<Planet>()
 			{
 				new Planet { PlanetNameContains = "Earth", AverageMinutesToStartRusting = 300},
 				new Planet { PlanetNameContains = "Alien", AverageMinutesToStartRusting = 180},
 				new Planet { PlanetNameContains = "Pertam", AverageMinutesToStartRusting = 60},
 				new Planet { PlanetNameContains = "Venus", AverageMinutesToStartRusting = 10},
+			},
+			BlockSubtypeContainsBlackList = new List<string>()
+			{
+				"Concrete",
+				"Wood",
 			}
 		};
 
@@ -38,18 +44,18 @@ namespace RustMechanics
 		{
 			try
 			{
-				string configFileName = "config1.1.xml";
-				if (MyAPIGateway.Utilities.FileExistsInWorldStorage(configFileName, typeof(PlanetsConfig)))
+				string configFileName = "config1.2.xml";
+				if (MyAPIGateway.Utilities.FileExistsInWorldStorage(configFileName, typeof(RustConfig)))
 				{
-					var textReader = MyAPIGateway.Utilities.ReadFileInWorldStorage(configFileName, typeof(PlanetsConfig));
+					var textReader = MyAPIGateway.Utilities.ReadFileInWorldStorage(configFileName, typeof(RustConfig));
 					var configXml = textReader.ReadToEnd();
 					textReader.Close();
-					planetsConfig = MyAPIGateway.Utilities.SerializeFromXML<PlanetsConfig>(configXml);
+					rustConfig = MyAPIGateway.Utilities.SerializeFromXML<RustConfig>(configXml);
 				}
 				else
 				{
-					var textWriter = MyAPIGateway.Utilities.WriteFileInWorldStorage(configFileName, typeof(PlanetsConfig));
-					textWriter.Write(MyAPIGateway.Utilities.SerializeToXML(planetsConfig));
+					var textWriter = MyAPIGateway.Utilities.WriteFileInWorldStorage(configFileName, typeof(RustConfig));
+					textWriter.Write(MyAPIGateway.Utilities.SerializeToXML(rustConfig));
 					textWriter.Flush();
 					textWriter.Close();
 				}

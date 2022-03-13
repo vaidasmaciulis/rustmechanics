@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -97,7 +98,7 @@ namespace RustMechanics
 							if (grid.Closed || grid.MarkedForClose)
 								continue;
 
-							if (Config.planetsConfig.OnlyRustUnpoweredGrids && MyVisualScriptLogicProvider.HasPower(grid.Name))
+							if (Config.rustConfig.OnlyRustUnpoweredGrids && MyVisualScriptLogicProvider.HasPower(grid.Name))
 								continue;
 
 							if (InSafeZone(grid))
@@ -113,19 +114,18 @@ namespace RustMechanics
 
 							foreach (var block in blocks)
 							{
-								if (_random.NextDouble() < planet.RustProbability)
+								if (_random.NextDouble() < planet.RustProbability &&
+									!Config.rustConfig.BlockSubtypeContainsBlackList.Any(block.BlockDefinition.Id.SubtypeName.Contains) &&
+									HasOpenFaces(block, grid, blocks.Count))
 								{
-									if (HasOpenFaces(block, grid, blocks.Count))
+									if (block.SkinSubtypeId == _heavyRustHash)
 									{
-										if (block.SkinSubtypeId == _heavyRustHash)
-										{
-											if (_slowQueue.Count < UPDATE_RATE)
-												_slowQueue.Enqueue(() => DamageBlock(block, gridInternal));
-										}
-										else
-										{
-											_actionQueue.Enqueue(() => RustBlockPaint(block, gridInternal));
-										}
+										if (_slowQueue.Count < UPDATE_RATE)
+											_slowQueue.Enqueue(() => DamageBlock(block, gridInternal));
+									}
+									else
+									{
+										_actionQueue.Enqueue(() => RustBlockPaint(block, gridInternal));
 									}
 								}
 							}
@@ -162,7 +162,7 @@ namespace RustMechanics
 			foreach (var entitiy in entities)
 			{
 				MyPlanet myPlanet = (MyPlanet)entitiy;
-				foreach (var planetConfig in Config.planetsConfig.planets)
+				foreach (var planetConfig in Config.rustConfig.Planets)
 				{
 					if (myPlanet.StorageName.Contains(planetConfig.PlanetNameContains))
 					{
