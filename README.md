@@ -83,3 +83,8 @@ To make rust maintenance more realistic it is recomended to use this mod togethe
 [h2]Acknowledgements[/h2]
 
 Mod is based on Atmospheric Damage script by [b]Rexxar[/b]. Could not find the original link, if someone has it, please let me know.
+
+Ships in screenshots:
+[url=https://steamcommunity.com/sharedfiles/filedetails/?id=2562576691]Astron, interplanetary tanker/hauler (No mods)[/url] by OctoBooze
+[url=https://steamcommunity.com/sharedfiles/filedetails/?id=2617139013]“Frontier” Scientific Research Exploration System(No Mod)[/url] by ARC17Alpha
+[url=https://steamcommunity.com/sharedfiles/filedetails/?id=2652038922]SpaceX Starship (1:1 scale)[/url] by me
