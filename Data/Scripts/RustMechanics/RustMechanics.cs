@@ -30,6 +30,7 @@ namespace RustMechanics
 	{
 		private const int UPDATE_RATE = 600; //rust will apply every 10 seconds
 		private const float RUST_DAMAGE = 0.5f;
+		private const bool DEBUG = false;
 
 		private readonly Random _random = new Random();
 		private bool _init;
@@ -76,7 +77,7 @@ namespace RustMechanics
 			}
 			catch (Exception e)
 			{
-				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+				Echo("RUST Mechanics UpdateBeforeSimulation exception: " + e + e.InnerException);
 			}
 		}
 
@@ -84,7 +85,6 @@ namespace RustMechanics
 		{
 			try
 			{
-				//MyVisualScriptLogicProvider.ShowNotification("Player position: " + MyVisualScriptLogicProvider.GetPlayersPosition(), 1000);
 				foreach (var planet in _planets)
 				{
 					var sphere = new BoundingSphereD(planet.MyPlanet.PositionComp.GetPosition(), planet.MyPlanet.AverageRadius + planet.MyPlanet.AtmosphereAltitude);
@@ -137,7 +137,7 @@ namespace RustMechanics
 			}
 			catch (Exception e)
 			{
-				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e, 5000);
+				Echo("RUST Mechanics ProcessDamage exception: " + e + e.InnerException);
 			}
 			finally
 			{
@@ -234,7 +234,6 @@ namespace RustMechanics
 					continue;
 				if (parentGrid.IsRoomAtPositionAirtight(parentGrid.WorldToGridInteger(sphere.Center)))
 				{
-					//MyVisualScriptLogicProvider.ShowNotification(grid + "is inside airtight grid" , 1000);
 					return true;
 				}
 			}
@@ -269,7 +268,6 @@ namespace RustMechanics
 		{
 			if (block.IsFullyDismounted)
 			{
-				//MyVisualScriptLogicProvider.ShowNotification("Removing block id: " + block.FatBlock.EntityId, 1000);
 				//TODO which faster? any difference?
 				//grid.RemoveBlock(block, true);
 				gridInternal.RazeBlock(block.Position);
@@ -277,14 +275,12 @@ namespace RustMechanics
 			else
 			{
 				block?.DecreaseMountLevel(RUST_DAMAGE, null, true);
-				//MyVisualScriptLogicProvider.ShowNotification("Decreasing for block to: " + block.BuildIntegrity, 1000);
 			}
 		}
 
 		//spread our invoke queue over many updates to avoid lag spikes
 		private void ProcessQueue()
 		{
-			//MyVisualScriptLogicProvider.ShowNotification("Queue size: " + _actionQueue.Count, 1000);
 			if (_actionQueue.Count == 0)
 				return;
 			for (int i = 0; i < _actionsPerTick; i++)
@@ -299,7 +295,6 @@ namespace RustMechanics
 
 		private void ProcessSlowQueue()
 		{
-			//MyVisualScriptLogicProvider.ShowNotification("Slow Queue size: " + _slowQueue.Count, 1000);
 			if (_slowQueue.Count == 0)
 				return;
 
@@ -325,13 +320,22 @@ namespace RustMechanics
 					}
 					catch (Exception e)
 					{
-						//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
+						Echo("RUST Mechanics InvokeOnGameThread exception: " + e + e.InnerException);
 					}
 				});
 			}
 			catch (Exception e)
 			{
-				//MyVisualScriptLogicProvider.ShowNotification("Exception: " + e + e.InnerException, 5000);
+				Echo("RUST Mechanics SafeInvoke exception: " + e + e.InnerException);
+			}
+		}
+
+		private static void Echo(string msg1, object msg2 = null)
+		{
+			MyLog.Default.WriteLineAndConsole(msg1 + ": " + msg2);
+			if (DEBUG)
+			{
+				MyAPIGateway.Utilities.ShowMessage(msg1, msg2?.ToString());
 			}
 		}
 	}
