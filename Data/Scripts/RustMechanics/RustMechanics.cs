@@ -101,6 +101,10 @@ namespace RustMechanics
 							if (Config.rustConfig.OnlyRustUnpoweredGrids && MyVisualScriptLogicProvider.HasPower(grid.Name))
 								continue;
 
+							MyCubeGrid gridInternal = (MyCubeGrid)grid;
+							if (gridInternal.Immune)
+								continue;
+
 							if (InSafeZone(grid))
 								continue;
 
@@ -109,8 +113,6 @@ namespace RustMechanics
 
 							var blocks = new List<IMySlimBlock>();
 							grid.GetBlocks(blocks);
-
-							MyCubeGrid gridInternal = (MyCubeGrid)grid;
 
 							foreach (var block in blocks)
 							{
